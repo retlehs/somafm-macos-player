@@ -270,11 +270,15 @@ final class AudioPlayer: NSObject, AudioPlayerProtocol {
         guard let player = player else { return }
 
         statusObservation = player.observe(\.status, options: [.new]) { [weak self] _, _ in
-            Task { @MainActor in self?.handlePlayerStatusChange() }
+            DispatchQueue.main.async { [weak self] in
+                self?.handlePlayerStatusChange()
+            }
         }
 
         timeControlStatusObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
-            Task { @MainActor in self?.handleTimeControlStatusChange() }
+            DispatchQueue.main.async { [weak self] in
+                self?.handleTimeControlStatusChange()
+            }
         }
     }
 
