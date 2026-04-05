@@ -60,7 +60,13 @@ jobs:
             exit 1
           fi
           export CODESIGN_IDENTITY="$IDENTITY"
-          ./scripts/create-app-bundle.sh --ci --notarize --dmg
+          if [ "${{ vars.ENABLE_NOTARIZATION }}" = "true" ]; then
+            echo "🔐 Notarization enabled"
+            ./scripts/create-app-bundle.sh --ci --notarize --dmg
+          else
+            echo "⏭️ Notarization disabled (ENABLE_NOTARIZATION=${{ vars.ENABLE_NOTARIZATION }})"
+            ./scripts/create-app-bundle.sh --ci --dmg
+          fi
 
       - name: Extract version from tag
         id: version
