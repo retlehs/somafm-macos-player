@@ -10,9 +10,9 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run tests
         run: swift test --filter 'ModelTests'
@@ -76,7 +76,7 @@ jobs:
             build/SomaFM.dmg
 
       - name: Checkout homebrew tap
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: retlehs/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
