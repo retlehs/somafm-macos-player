@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests
+        run: swift test --filter 'ModelTests'
+
+      - name: Set up signing certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          # Decode certificate
+          echo "$CERTIFICATE_P12" | base64 --decode > $RUNNER_TEMP/certificate.p12
+
+          # Create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Import certificate
+          security import $RUNNER_TEMP/certificate.p12 \
+            -P "$CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k $KEYCHAIN_PATH
+
+          # Allow codesign to access the keychain
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Add to search list
+          security list-keychains -d user -s $KEYCHAIN_PATH login.keychain-db
+
+      - name: Build, sign, and notarize
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          # Find the signing identity from the imported certificate
+          IDENTITY=$(security find-identity -p codesigning -v | grep "Developer ID Application" | head -1 | awk '{print $2}')
+          if [ -z "$IDENTITY" ]; then
+            echo "❌ No signing identity found"
+            exit 1
+          fi
+          export CODESIGN_IDENTITY="$IDENTITY"
+          ./scripts/create-app-bundle.sh --ci --notarize --dmg
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SomaFM Player ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            build/SomaFM Menu Bar Player.zip
+            build/SomaFM.dmg
+
+      - name: Checkout homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: retlehs/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update Homebrew cask
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ZIP_PATH="build/SomaFM Menu Bar Player.zip"
+          SHA256=$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')
+          URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/SomaFM%20Menu%20Bar%20Player.zip"
+
+          cat > homebrew-tap/Casks/somafm-player.rb <<EOF
+          cask "somafm-player" do
+            version "$VERSION"
+            sha256 "$SHA256"
+
+            url "$URL"
+            name "SomaFM Menu Bar Player"
+            desc "Native macOS status bar player for SomaFM radio"
+            homepage "https://github.com/${{ github.repository }}"
+
+            depends_on macos: ">= :ventura"
+
+            app "SomaFM Menu Bar Player.app"
+
+            zap trash: [
+              "~/Library/Preferences/com.benword.somafm-menubar-player.plist"
+            ]
+          end
+          EOF
+
+      - name: Commit and push tap update
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/somafm-player.rb
+          if git diff --cached --quiet; then
+            echo "No tap changes to commit"
+            exit 0
+          fi
+          git commit -m "somafm-player $VERSION"
+          git push
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain $RUNNER_TEMP/signing.keychain-db 2>/dev/null || true
