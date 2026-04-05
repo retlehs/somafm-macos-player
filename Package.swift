@@ -12,7 +12,7 @@ let package = Package(
         .executable(name: "SomaFM", targets: ["SomaFM"])
     ],
     dependencies: [
-        // Add dependencies here if needed
+        .package(url: "https://github.com/apple/swift-testing.git", from: "0.9.0")
     ],
     targets: [
         .executableTarget(
@@ -21,7 +21,10 @@ let package = Package(
         ),
         .testTarget(
             name: "SomaFMTests",
-            dependencies: ["SomaFM"]
+            dependencies: [
+                "SomaFM",
+                .product(name: "Testing", package: "swift-testing")
+            ]
         )
     ]
 )
