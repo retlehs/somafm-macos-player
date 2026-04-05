@@ -93,7 +93,7 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           ZIP_PATH="build/SomaFM Menu Bar Player.zip"
           SHA256=$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')
-          URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/SomaFM%20Menu%20Bar%20Player.zip"
+          URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/SomaFM.Menu.Bar.Player.zip"
 
           cat > homebrew-tap/Casks/somafm-player.rb <<EOF
           cask "somafm-player" do
