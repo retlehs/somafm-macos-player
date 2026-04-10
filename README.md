@@ -21,7 +21,7 @@ Install with:
 
 ```bash
 brew tap retlehs/tap
-brew install --cask somafm-player
+brew install --cask retlehs/tap/somafm-player
 ```
 
 ## Features
