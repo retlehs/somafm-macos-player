@@ -36,6 +36,8 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     // Track station checkmarks for updating
     private var stationCheckmarks: [String: NSTextField] = [:]
 
+    private var cachedMenu: NSMenu?
+
     init(viewModel: StatusBarViewModel) {
         self.viewModel = viewModel
         super.init()
@@ -46,8 +48,8 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.title = "S"
             button.toolTip = "SomaFM Player"
+            updateStatusItemIcon()
         }
         buildMenu()
     }
@@ -88,6 +90,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         viewModel.$isPlaying
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
+                self?.updateStatusItemIcon()
                 self?.updateNowPlayingView()
             }
             .store(in: &cancellables)
@@ -264,8 +267,39 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         quitItem.target = self
         menu.addItem(quitItem)
 
-        statusItem.menu = menu
-        statusItem.menu?.delegate = self
+        cachedMenu = menu
+        applyClickBehavior()
+    }
+
+    private func applyClickBehavior() {
+        if settings.clickTrayIconTogglesPlayback {
+            statusItem.menu = nil
+            if let button = statusItem.button {
+                button.action = #selector(trayIconClicked)
+                button.target = self
+                button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            }
+        } else {
+            if let button = statusItem.button {
+                button.action = nil
+                button.target = nil
+            }
+            statusItem.menu = cachedMenu
+            statusItem.menu?.delegate = self
+        }
+    }
+
+    @objc private func trayIconClicked() {
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+            statusItem.menu = cachedMenu
+            statusItem.button?.performClick(nil)
+            DispatchQueue.main.async { [weak self] in
+                self?.applyClickBehavior()
+            }
+        } else {
+            viewModel.togglePlayPause()
+        }
     }
 
     private func createStationsSubmenu() -> NSMenuItem {
@@ -398,6 +432,13 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         autoPlayItem.state = settings.autoPlayOnLaunch ? .on : .off
         prefsMenu.addItem(autoPlayItem)
 
+        let trayClickItem = NSMenuItem(title: "Left Click Toggles Playback",
+                                       action: #selector(toggleTrayClick),
+                                       keyEquivalent: "")
+        trayClickItem.target = self
+        trayClickItem.state = settings.clickTrayIconTogglesPlayback ? .on : .off
+        prefsMenu.addItem(trayClickItem)
+
         return prefsItem
     }
 
@@ -434,6 +475,11 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         buildMenu()
     }
 
+    @objc private func toggleTrayClick() {
+        settings.clickTrayIconTogglesPlayback.toggle()
+        buildMenu()
+    }
+
     @objc private func quit() {
         NSApplication.shared.terminate(nil)
     }
@@ -463,6 +509,23 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     }
 
     // MARK: - UI Updates (handled by view model via Combine)
+
+    private func updateStatusItemIcon() {
+        guard let button = statusItem.button else { return }
+
+        let imageName = viewModel.isPlaying ? "SomaFMTrayPlaying" : "SomaFMTrayPaused"
+        guard let image = NSImage(named: imageName) else {
+            button.image = nil
+            button.title = "S"
+            return
+        }
+
+        image.isTemplate = true
+        image.size = NSSize(width: 18, height: 18)
+        button.title = ""
+        button.image = image
+        button.imageScaling = .scaleProportionallyDown
+    }
 
     private func updateNowPlayingView() {
         // Update all now playing elements efficiently

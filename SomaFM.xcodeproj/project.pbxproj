@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		1A1234571234567890ABCDE0 /* Icon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 1A1234581234567890ABCDE1 /* Icon.icns */; };
 		1A12345B1234567890ABCDE4 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1A12345C1234567890ABCDE5 /* PrivacyInfo.xcprivacy */; };
+		1A1234611234567890ABCDE8 /* SomaFMTrayPaused.png in Resources */ = {isa = PBXBuildFile; fileRef = 1A1234621234567890ABCDE9 /* SomaFMTrayPaused.png */; };
+		1A1234631234567890ABCDEA /* SomaFMTrayPlaying.png in Resources */ = {isa = PBXBuildFile; fileRef = 1A1234641234567890ABCDEB /* SomaFMTrayPlaying.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -17,6 +19,8 @@
 		1A12345A1234567890ABCDE3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		1A12345C1234567890ABCDE5 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		1A12345D1234567890ABCDE6 /* SomaFM.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SomaFM.entitlements; sourceTree = "<group>"; };
+		1A1234621234567890ABCDE9 /* SomaFMTrayPaused.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = SomaFMTrayPaused.png; sourceTree = "<group>"; };
+		1A1234641234567890ABCDEB /* SomaFMTrayPlaying.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = SomaFMTrayPlaying.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -37,6 +41,7 @@
 				1A12345A1234567890ABCDE3 /* Info.plist */,
 				1A12345C1234567890ABCDE5 /* PrivacyInfo.xcprivacy */,
 				1A12345D1234567890ABCDE6 /* SomaFM.entitlements */,
+				1A1234601234567890ABCDE7 /* Tray Icons */,
 				1A1234511234567890ABCDEF /* Products */,
 			);
 			sourceTree = "<group>";
@@ -47,6 +52,15 @@
 				1A1234501234567890ABCDEF /* SomaFM Menu Bar Player.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		1A1234601234567890ABCDE7 /* Tray Icons */ = {
+			isa = PBXGroup;
+			children = (
+				1A1234621234567890ABCDE9 /* SomaFMTrayPaused.png */,
+				1A1234641234567890ABCDEB /* SomaFMTrayPlaying.png */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -110,6 +124,8 @@
 			files = (
 				1A1234571234567890ABCDE0 /* Icon.icns in Resources */,
 				1A12345B1234567890ABCDE4 /* PrivacyInfo.xcprivacy in Resources */,
+				1A1234611234567890ABCDE8 /* SomaFMTrayPaused.png in Resources */,
+				1A1234631234567890ABCDEA /* SomaFMTrayPlaying.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
