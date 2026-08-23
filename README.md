@@ -31,6 +31,8 @@ brew install --cask retlehs/tap/somafm-player
 - Rich station menu with artwork and descriptions
 - Live track updates every 10 seconds
 - Media key support (Play/Pause)
+- Optional left-click play/pause from the menu bar icon
+- Distinct tray icons for playing and paused states
 - Independent in-app volume control
 - Clickable track title to search the current song
 - Auto-play on launch option
