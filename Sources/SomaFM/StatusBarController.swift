@@ -36,6 +36,8 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     // Track station checkmarks for updating
     private var stationCheckmarks: [String: NSTextField] = [:]
 
+    private var cachedMenu: NSMenu?
+
     init(viewModel: StatusBarViewModel) {
         self.viewModel = viewModel
         super.init()
@@ -264,8 +266,39 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         quitItem.target = self
         menu.addItem(quitItem)
 
-        statusItem.menu = menu
-        statusItem.menu?.delegate = self
+        cachedMenu = menu
+        applyClickBehavior()
+    }
+
+    private func applyClickBehavior() {
+        if settings.clickTrayIconTogglesPlayback {
+            statusItem.menu = nil
+            if let button = statusItem.button {
+                button.action = #selector(trayIconClicked)
+                button.target = self
+                button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            }
+        } else {
+            if let button = statusItem.button {
+                button.action = nil
+                button.target = nil
+            }
+            statusItem.menu = cachedMenu
+            statusItem.menu?.delegate = self
+        }
+    }
+
+    @objc private func trayIconClicked() {
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+            statusItem.menu = cachedMenu
+            statusItem.button?.performClick(nil)
+            DispatchQueue.main.async { [weak self] in
+                self?.applyClickBehavior()
+            }
+        } else {
+            viewModel.togglePlayPause()
+        }
     }
 
     private func createStationsSubmenu() -> NSMenuItem {
@@ -398,6 +431,13 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         autoPlayItem.state = settings.autoPlayOnLaunch ? .on : .off
         prefsMenu.addItem(autoPlayItem)
 
+        let trayClickItem = NSMenuItem(title: "Left Click Toggles Playback",
+                                       action: #selector(toggleTrayClick),
+                                       keyEquivalent: "")
+        trayClickItem.target = self
+        trayClickItem.state = settings.clickTrayIconTogglesPlayback ? .on : .off
+        prefsMenu.addItem(trayClickItem)
+
         return prefsItem
     }
 
@@ -431,6 +471,11 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
     @objc private func toggleAutoPlay() {
         viewModel.toggleAutoPlay()
+        buildMenu()
+    }
+
+    @objc private func toggleTrayClick() {
+        settings.clickTrayIconTogglesPlayback.toggle()
         buildMenu()
     }
 

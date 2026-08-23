@@ -3,3 +3,11 @@
 .swiftpm/
 build/
 xcuserdata/
+
+# macOS
+.DS_Store
+Icon?
+
+# Command Code
+.commandcode/
+

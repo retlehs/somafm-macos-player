@@ -42,5 +42,8 @@ final class Settings {
     @UserDefault(key: "menuShowsListenerCount", defaultValue: true)
     var menuShowsListenerCount: Bool
 
+    @UserDefault(key: "clickTrayIconTogglesPlayback", defaultValue: false)
+    var clickTrayIconTogglesPlayback: Bool
+
     private init() {}
 }
