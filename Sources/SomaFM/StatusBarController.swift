@@ -48,8 +48,8 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.title = "S"
             button.toolTip = "SomaFM Player"
+            updateStatusItemIcon()
         }
         buildMenu()
     }
@@ -90,6 +90,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         viewModel.$isPlaying
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
+                self?.updateStatusItemIcon()
                 self?.updateNowPlayingView()
             }
             .store(in: &cancellables)
@@ -508,6 +509,23 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     }
 
     // MARK: - UI Updates (handled by view model via Combine)
+
+    private func updateStatusItemIcon() {
+        guard let button = statusItem.button else { return }
+
+        let imageName = viewModel.isPlaying ? "SomaFMTrayPlaying" : "SomaFMTrayPaused"
+        guard let image = NSImage(named: imageName) else {
+            button.image = nil
+            button.title = "S"
+            return
+        }
+
+        image.isTemplate = true
+        image.size = NSSize(width: 18, height: 18)
+        button.title = ""
+        button.image = image
+        button.imageScaling = .scaleProportionallyDown
+    }
 
     private func updateNowPlayingView() {
         // Update all now playing elements efficiently

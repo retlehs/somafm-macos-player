@@ -87,6 +87,15 @@ if [ -f Icon.icns ]; then
     cp Icon.icns "build/${APP_NAME}.app/Contents/Resources/"
 fi
 
+# Copy tray icons for paused and playing states
+for tray_icon in Resources/SomaFMTrayPaused.png Resources/SomaFMTrayPlaying.png; do
+    if [ ! -f "$tray_icon" ]; then
+        echo -e "${RED}❌ Missing tray icon: ${tray_icon}${NC}"
+        exit 1
+    fi
+    cp "$tray_icon" "build/${APP_NAME}.app/Contents/Resources/"
+done
+
 # Sign the app
 sign_app() {
     local identity="$1"
