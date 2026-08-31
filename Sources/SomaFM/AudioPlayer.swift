@@ -49,6 +49,9 @@ final class AudioPlayer: NSObject, AudioPlayerProtocol {
     private var statusObservation: NSKeyValueObservation?
     private var timeControlStatusObservation: NSKeyValueObservation?
 
+    // Buffering
+    private let preferredBufferDuration: TimeInterval = 30.0
+
     // Retry tracking
     private var retryCount = 0
     private let maxRetries = 3
@@ -108,8 +111,13 @@ final class AudioPlayer: NSObject, AudioPlayerProtocol {
             retryCount = 0
         }
 
-        // Create new player
-        player = AVPlayer(url: url)
+        // Create new player with a larger forward buffer to ride out network hiccups.
+        // Playback still starts as soon as enough data arrives; the buffer fills in
+        // the background while playing.
+        let playerItem = AVPlayerItem(url: url)
+        playerItem.preferredForwardBufferDuration = preferredBufferDuration
+        player = AVPlayer(playerItem: playerItem)
+        player?.automaticallyWaitsToMinimizeStalling = true
         player?.volume = volume
 
         // Setup block-based KVO observers
