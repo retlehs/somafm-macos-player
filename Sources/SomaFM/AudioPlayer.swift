@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import MediaPlayer
+import Network
 
 // MARK: - AudioPlayer Delegate
 
@@ -49,12 +50,18 @@ final class AudioPlayer: NSObject, AudioPlayerProtocol {
     private var statusObservation: NSKeyValueObservation?
     private var timeControlStatusObservation: NSKeyValueObservation?
 
-    // Retry tracking
+    // Retry tracking. Retries continue until the user stops playback;
+    // retryCount only drives the backoff delay.
     private var retryCount = 0
-    private let maxRetries = 3
     private let baseRetryDelay: TimeInterval = 1.0
-    private let maxRetryDelay: TimeInterval = 8.0
+    private let maxRetryDelay: TimeInterval = 30.0
     private var retryTask: Task<Void, Never>?
+    private var stallWatchdogTask: Task<Void, Never>?
+    private let stallRecoveryTimeout: TimeInterval = 10.0
+
+    // Network path monitoring
+    private var pathMonitor: NWPathMonitor?
+    private var lastPathKey: String?
 
     var currentSong: String? {
         didSet {
@@ -85,6 +92,7 @@ final class AudioPlayer: NSObject, AudioPlayerProtocol {
         setupRemoteCommandCenter()
         setupNotifications()
         setupAudioRouteNotifications()
+        setupNetworkMonitor()
     }
 
     func play(channel: Channel) {
@@ -171,6 +179,9 @@ final class AudioPlayer: NSObject, AudioPlayerProtocol {
         timeControlStatusObservation?.invalidate()
         timeControlStatusObservation = nil
 
+        stallWatchdogTask?.cancel()
+        stallWatchdogTask = nil
+
         player?.pause()
         player = nil
     }
@@ -224,13 +235,31 @@ final class AudioPlayer: NSObject, AudioPlayerProtocol {
     }
 
     @objc private func playerItemFailedToPlay(notification: Notification) {
-        // Player item failed to play
-        // Could retry or notify user here
+        Task { @MainActor [weak self] in
+            self?.handlePlayerFailure()
+        }
     }
 
     @objc private func playerItemStalled(notification: Notification) {
-        // Playback stalled, attempting to resume...
-        player?.play()
+        // Nudge the player, then escalate to a full reconnect if it doesn't recover.
+        // A dropped connection often leaves a live stream stalled forever without ever failing.
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.player?.play()
+            self.startStallWatchdog()
+        }
+    }
+
+    private func startStallWatchdog() {
+        stallWatchdogTask?.cancel()
+        stallWatchdogTask = Task { [weak self] in
+            guard let timeout = self?.stallRecoveryTimeout else { return }
+            try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+            guard let self, !Task.isCancelled else { return }
+            if self.isPlaying, self.player?.timeControlStatus != .playing {
+                self.handlePlayerFailure()
+            }
+        }
     }
 
     // MARK: - Audio Route Changes (macOS)
@@ -262,6 +291,46 @@ final class AudioPlayer: NSObject, AudioPlayerProtocol {
                 handlePlayerFailure()
             }
         }
+    }
+
+    // MARK: - Network Path Monitoring
+
+    private func setupNetworkMonitor() {
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            let satisfied = path.status == .satisfied
+            let key = satisfied
+                ? "up:" + path.availableInterfaces.map(\.name).sorted().joined(separator: ",")
+                : "down"
+            Task { @MainActor [weak self] in
+                self?.handleNetworkPathChange(key: key, satisfied: satisfied)
+            }
+        }
+        monitor.start(queue: DispatchQueue(label: "AudioPlayer.NWPathMonitor"))
+        pathMonitor = monitor
+    }
+
+    private func handleNetworkPathChange(key: String, satisfied: Bool) {
+        let previous = lastPathKey
+        lastPathKey = key
+        // Ignore the initial callback and no-op updates
+        guard let previous, key != previous, satisfied else { return }
+        guard isPlaying, let channel = currentChannel else { return }
+
+        if previous == "down" {
+            // Network came back: reconnect immediately instead of waiting out the backoff
+            restartPlayback(channel: channel)
+        } else if player?.timeControlStatus != .playing {
+            // Interface changed (e.g. Wi-Fi -> Ethernet) and the stream didn't survive it
+            restartPlayback(channel: channel)
+        }
+    }
+
+    private func restartPlayback(channel: Channel) {
+        retryTask?.cancel()
+        retryTask = nil
+        retryCount = 0
+        play(channel: channel)
     }
 
     // MARK: - Player Observations
@@ -311,26 +380,20 @@ final class AudioPlayer: NSObject, AudioPlayerProtocol {
             // Player buffering...
             break
         case .playing:
-            // Player playing
-            break
+            // Playback recovered — clear any pending stall watchdog and reset backoff
+            stallWatchdogTask?.cancel()
+            stallWatchdogTask = nil
+            retryCount = 0
         @unknown default:
             break
         }
     }
 
     private func handlePlayerFailure() {
-        // Attempt recovery if we should be playing and haven't exceeded retry limit
+        // Attempt recovery if we should be playing.
+        // Never give up: keep retrying with capped backoff until the user stops playback
+        // or the network monitor triggers an immediate restart.
         guard isPlaying, let channel = currentChannel else { return }
-
-        if retryCount >= maxRetries {
-            // Max retries reached, give up
-            // Failed to play channel after max attempts
-            stop()
-
-            // Notify delegate about the failure (could show error to user)
-            // For now, just stop trying
-            return
-        }
 
         retryCount += 1
 
@@ -352,6 +415,8 @@ final class AudioPlayer: NSObject, AudioPlayerProtocol {
 
     deinit {
         retryTask?.cancel()
+        stallWatchdogTask?.cancel()
+        pathMonitor?.cancel()
         statusObservation?.invalidate()
         timeControlStatusObservation?.invalidate()
         player?.pause()
